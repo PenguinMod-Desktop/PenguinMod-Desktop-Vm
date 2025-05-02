@@ -60,7 +60,7 @@ class Cache {
         });
 
         if (doesExist) {
-            const data = await writeTextFile('config.toml', JSON.stringify(this._data), {
+            const data = await writeTextFile(this.file + '.cache', JSON.stringify(this._data), {
                 baseDir: BaseDirectory.AppConfig,
             });
         } else {

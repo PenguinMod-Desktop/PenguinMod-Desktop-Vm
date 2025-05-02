@@ -477,7 +477,7 @@ class ExtensionManager {
 
         if (rewritten == undefined) throw new Error(`Failed to locate extension: ${extensionURL}`);
 
-        const blob = !navigator.onLine && this._isRemoteExtensionURL(extensionURL) ? new Blob([await fetch(rewritten).then(req => decodeURIComponent(req.text()))], { type: "text/javascript" }) : (await fetch(rewritten).then(req => req.blob()));
+        const blob = !navigator.onLine && this._isRemoteExtensionURL(extensionURL) ? new Blob([decodeURIComponent(atob(rewritten))], { type: "text/javascript" }) : (await fetch(rewritten).then(req => req.blob()));
         const blobUrl = URL.createObjectURL(blob)
         const newHash = await new Promise(resolve => {
             const reader = new FileReader()
@@ -485,7 +485,7 @@ class ExtensionManager {
                 console.log(result)
                 this.extUrlCodes[extensionURL] = result
                 if (this._isRemoteExtensionURL(extensionURL)) { 
-                    ExtensionCache.update(extensionURL, 'data:text/javascript;charset=UTF-8;base64,' + btoa(encodeURIComponent(result)));
+                    ExtensionCache.update(extensionURL, btoa(encodeURIComponent(result)));
                 }
                 resolve(await sha256(result))
             }
