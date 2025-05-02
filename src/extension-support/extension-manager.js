@@ -5,6 +5,7 @@ const maybeFormatMessage = require('../util/maybe-format-message');
 const BlockType = require('./block-type');
 const SecurityManager = require('./tw-security-manager');
 const Cast = require('../util/cast');
+const { ExtensionCache } = require('../util/tauri-cache');
 
 const AddonSwitches = require('./extension-addon-switchers');
 
@@ -429,6 +430,18 @@ class ExtensionManager {
         }
     }
 
+    _isRemoteExtensionURL(extensionURL) {
+        try {
+            const parsedURL = new URL(extensionURL);
+            return (
+                parsedURL.protocol === 'https:' ||
+                parsedURL.protocol === 'http:'
+            );
+        } catch (e) {
+            return false;
+        }
+    }
+
     /**
      * Load an extension by URL or internal extension ID
      * @param {string} normalURL - the URL for the extension to load OR the ID of an internal extension
@@ -460,7 +473,10 @@ class ExtensionManager {
         this.loadingAsyncExtensions++;
 
         const sandboxMode = await this.securityManager.getSandboxMode(normalURL);
-        const rewritten = await this.securityManager.rewriteExtensionURL(normalURL);
+        const rewritten = navigator.onLine ? await this.securityManager.rewriteExtensionURL(normalURL) : ExtensionCache.get(extensionURL);
+
+        if (rewritten == undefined) throw new Error(`Failed to locate extension: ${extensionURL}`);
+
         const blob = (await fetch(rewritten).then(req => req.blob()))
         const blobUrl = URL.createObjectURL(blob)
         const newHash = await new Promise(resolve => {
@@ -468,10 +484,13 @@ class ExtensionManager {
             reader.onload = async ({ target: { result } }) => {
                 console.log(result)
                 this.extUrlCodes[extensionURL] = result
+                if (this._isRemoteExtensionURL(extensionURL)) { 
+                    ExtensionCache.update(extensionURL, 'data:text/plain;charset=UTF-8;base64,' + btoa(result));
+                }
                 resolve(await sha256(result))
             }
             reader.onerror = err => {
-                console.error('couldnt read the contents of url', url, err)
+                console.error("couldn't read the contents of url", extensionURL, err)
             }
             reader.readAsText(blob)
         })
