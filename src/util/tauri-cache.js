@@ -15,7 +15,7 @@ class Cache {
         this.file = fileName;
         this._data = {};
 
-        _attemptLoadData();
+        this._attemptLoadData();
     }
 
     /**
@@ -43,7 +43,17 @@ class Cache {
      * @private
      */
     async _attemptSaveData() {
-        const {exists, create, writeTextFile, BaseDirectory} = window.__TAURI__.fs;
+        const {exists, mkdir, create, writeTextFile, BaseDirectory} = window.__TAURI__.fs;
+
+        const dirExists = await exists('./', {
+            baseDir: BaseDirectory.AppCache
+        });
+
+        if (!dirExists) {
+            await mkdir('./', {
+                baseDir: BaseDirectory.AppCache
+            });
+        }
 
         const doesExist = await exists(this.file + '.cache', {
             baseDir: BaseDirectory.AppCache
@@ -70,7 +80,7 @@ class Cache {
      */
     update(first, second) {
         this._data[first] = second;
-        _attemptSaveData();
+        this._attemptSaveData();
     }
 
     /**
