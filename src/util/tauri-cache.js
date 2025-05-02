@@ -61,7 +61,7 @@ class Cache {
 
         if (doesExist) {
             const data = await writeTextFile(this.file + '.cache', JSON.stringify(this._data), {
-                baseDir: BaseDirectory.AppConfig,
+                baseDir: BaseDirectory.AppCache,
             });
         } else {
             const file = await create(this.file + '.cache', {
