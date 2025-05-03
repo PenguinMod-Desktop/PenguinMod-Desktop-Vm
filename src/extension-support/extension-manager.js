@@ -473,7 +473,7 @@ class ExtensionManager {
         this.loadingAsyncExtensions++;
 
         const sandboxMode = await this.securityManager.getSandboxMode(normalURL);
-        const rewritten = navigator.onLine ? await this.securityManager.rewriteExtensionURL(normalURL) : ExtensionCache.get(extensionURL);
+        const rewritten = navigator.onLine || !this._isRemoteExtensionURL(extensionURL) ? await this.securityManager.rewriteExtensionURL(normalURL) : ExtensionCache.get(extensionURL);
 
         if (rewritten == undefined) throw new Error(`Failed to locate extension: ${extensionURL}`);
 
