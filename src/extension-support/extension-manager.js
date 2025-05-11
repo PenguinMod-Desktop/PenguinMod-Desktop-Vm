@@ -228,7 +228,11 @@ const defaultBuiltinExtensions = {
     iygPerlin: () => require('../extensions/iyg_perlin_noise'),
     // fr: waw 3d physics!!
     // fr3d:
-    fr3d: () => require('../extensions/fr_3d')
+    fr3d: () => require('../extensions/fr_3d'),
+
+    // PenguinMod Desktop Extension
+
+    tauriWebview: () => require('../extensions/tauri-webview')
 };
 
 const coreExtensionList = Object.getOwnPropertyNames(defaultBuiltinExtensions);
