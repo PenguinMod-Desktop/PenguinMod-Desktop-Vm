@@ -28,24 +28,24 @@ class Scratch3LooksBlocks {
         this._onResetBubbles = this._onResetBubbles.bind(this);
         this._onTargetWillExit = this._onTargetWillExit.bind(this);
         this._updateBubble = this._updateBubble.bind(this);
-        
+
         this.SAY_BUBBLE_LIMITdefault = 330;
         this.SAY_BUBBLE_LIMIT = this.SAY_BUBBLE_LIMITdefault;
         this.defaultBubble = {
             MAX_LINE_WIDTH: 170, // Maximum width, in Scratch pixels, of a single line of text
-            
+
             MIN_WIDTH: 50, // Minimum width, in Scratch pixels, of a text bubble
-            STROKE_WIDTH: 4, // Thickness of the stroke around the bubble. 
+            STROKE_WIDTH: 4, // Thickness of the stroke around the bubble.
             // Only half's visible because it's drawn under the fill
             PADDING: 10, // Padding around the text area
             CORNER_RADIUS: 16, // Radius of the rounded corners
             TAIL_HEIGHT: 12, // Height of the speech bubble's "tail". Probably should be a constant.
-            
+
             FONT: 'Helvetica', // Font to render the text with
             FONT_SIZE: 14, // Font size, in Scratch pixels
             FONT_HEIGHT_RATIO: 0.9, // Height, in Scratch pixels, of the text, as a proportion of the font's size
             LINE_HEIGHT: 16, // Spacing between each line of text
-            
+
             COLORS: {
                 BUBBLE_FILL: 'white',
                 BUBBLE_STROKE: 'rgba(0, 0, 0, 0.15)',
@@ -280,7 +280,7 @@ class Scratch3LooksBlocks {
         } else {
             target.onTargetVisualChange = this._onTargetChanged;
             bubbleState.drawableId = this.runtime.renderer.createDrawable(StageLayering.SPRITE_LAYER);
-            bubbleState.skinId = this.runtime.renderer.createTextSkin(type, text, 
+            bubbleState.skinId = this.runtime.renderer.createTextSkin(type, text,
                 bubbleState.onSpriteRight, bubbleState.props);
             this.runtime.renderer.updateDrawableSkinId(bubbleState.drawableId, bubbleState.skinId);
         }
@@ -376,6 +376,7 @@ class Scratch3LooksBlocks {
             looks_costumenumbername: this.getCostumeNumberName,
             looks_backdropnumbername: this.getBackdropNumberName,
             looks_setStretch: this.stretchSet,
+            looks_changeStretch: this.changeStretch,
             looks_stretchGetX: this.getStretchX,
             looks_stretchGetY: this.getStretchY,
             looks_sayWidth: this.getBubbleWidth,
@@ -430,19 +431,26 @@ class Scratch3LooksBlocks {
         return val;
     }
 
-    getStretchY (args, util) { 
-        return util.target._getRenderedDirectionAndScale().stretch[1]; 
+    getStretchY (args, util) {
+        return util.target._getRenderedDirectionAndScale().stretch[1];
     }
-    getStretchX (args, util) { 
-        return util.target._getRenderedDirectionAndScale().stretch[0]; 
+    getStretchX (args, util) {
+        return util.target._getRenderedDirectionAndScale().stretch[0];
     }
 
     stretchSet (args, util) {
         util.target.setStretch(args.X, args.Y);
     }
 
+    changeStretch(args, util) {
+        let [x, y] = util.target._getRenderedDirectionAndScale().stretch;
+        let new_x = x + Cast.toNumber(args.X)
+        let new_y = y + Cast.toNumber(args.Y)
+        util.target.setStretch(new_x, new_y)
+    }
+
     setFont (args, util) {
-        this._setBubbleProperty(        
+        this._setBubbleProperty(
             util.target,
             ['FONT', 'FONT_SIZE'],
             [args.font, args.size]
@@ -601,7 +609,7 @@ class Scratch3LooksBlocks {
     hideSprite (args, util) {
         this.showOrHideSprite({ VISIBLE_OPTION: args.VISIBLE_OPTION, VISIBLE_TYPE: "hide" }, util);
     }
-    
+
     getSpriteVisible (args, util) {
         return util.target.visible;
     }
@@ -620,7 +628,7 @@ class Scratch3LooksBlocks {
         if (!target) return;
         return target.visible;
     }
-    
+
     getEffectValue (args, util) {
         const effect = Cast.toString(args.EFFECT).toLowerCase();
         const effects = util.target.effects;
@@ -665,6 +673,18 @@ class Scratch3LooksBlocks {
             // Try to cast the string to a number (and treat it as a costume index)
             // Pure whitespace should not be treated as a number
             // Note: isNaN will cast the string to a number before checking if it's NaN
+            } else if (requestedCostume === 'random costume') {
+                let randomIndex = MathUtil.inclusiveRandIntWithout(
+                    0,
+                    target.sprite.costumes_.length - 1,
+                    target.currentCostume
+                )
+                if (randomIndex >= target.sprite.costumes_.length) {
+                    randomIndex = 0;
+                    // This really only accounts for if there's only 1
+                    // costume.
+                }
+                target.setCostume(randomIndex);
             } else if (!(isNaN(requestedCostume) || Cast.isWhiteSpace(requestedCostume))) {
                 target.setCostume(optZeroIndex ? Number(requestedCostume) : Number(requestedCostume) - 1);
             }
@@ -694,7 +714,37 @@ class Scratch3LooksBlocks {
             // Numbers should be treated as costume indices, always
             costumeIndex = (requestedCostume === 0) ? 0 : requestedCostume - 1;
         } else {
-            costumeIndex = target.getCostumeIndexByName(Cast.toString(requestedCostume));
+            let noun = target.isStage ? "backdrop" : "costume";
+            switch (Cast.toString(requestedCostume)) {
+                case "next " + noun:
+                    costumeIndex = target.currentCostume + 1;
+                    if (costumeIndex >= target.sprite.costumes_.length) {
+                        costumeIndex = 0
+                        // loop around to front
+                    }
+                    break;
+                case "previous " + noun:
+                    costumeIndex = target.currentCostume - 1;
+                    if (costumeIndex < 0) {
+                        costumeIndex = target.sprite.costumes_.length - 1;
+                        // Loop around to back
+                    }
+                    break;
+                case "random " + noun:
+                    costumeIndex = MathUtil.inclusiveRandIntWithout(
+                        0,
+                        target.sprite.costumes_.length - 1,
+                        target.currentCostume
+                    )
+                    if (costumeIndex >= target.sprite.costumes_.length) {
+                        costumeIndex = 0;
+                        // This really only accounts for if there's only 1
+                        // costume.
+                    }
+                    break;
+                default:
+                    costumeIndex = target.getCostumeIndexByName(Cast.toString(requestedCostume));
+            }
         }
         if (costumeIndex < 0) return this.costumeValueToDefaultNone(requestedValue);
         if (!target.sprite) return this.costumeValueToDefaultNone(requestedValue);
