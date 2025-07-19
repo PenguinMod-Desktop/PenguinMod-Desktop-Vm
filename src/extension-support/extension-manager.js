@@ -162,6 +162,8 @@ const defaultBuiltinExtensions = {
     jwNum: () => require("../extensions/jwNum"),
     // good color utilties
     jwColor: () => require("../extensions/jwColor"),
+    // access to extraFiles
+    jwStorage: () => require("../extensions/jwStorage"),
 
     // jw: They'll think its made by jwklong >:)
     // (but it's not (yet (maybe (probably not (but its made by ianyourgod)))))
@@ -224,7 +226,7 @@ const defaultBuiltinExtensions = {
     // griffpatch: () => require('../extensions/griffpatch_box2d')
 
     // iyg: erm a crep, erm a werdohhhh
-    // iygPerlin: 
+    // iygPerlin:
     iygPerlin: () => require('../extensions/iyg_perlin_noise'),
     // fr: waw 3d physics!!
     // fr3d:
@@ -234,6 +236,20 @@ const defaultBuiltinExtensions = {
 
     tauriWebview: () => require('../extensions/tauri-webview')
 };
+const CORE_EXTENSIONS = [
+    'argument',
+    'colour',
+    'control',
+    'data',
+    'event',
+    'looks',
+    'math',
+    'motion',
+    'operator',
+    'procedures',
+    'sensing',
+    'sound'
+];
 
 const coreExtensionList = Object.getOwnPropertyNames(defaultBuiltinExtensions);
 
@@ -364,7 +380,7 @@ class ExtensionManager {
     }
 
     getAddonBlockSwitches() {
-        return AddonSwitches();
+        return AddonSwitches(this.vm);
     }
 
     /**
@@ -499,7 +515,7 @@ class ExtensionManager {
             reader.readAsText(blob)
         })
         this.extensionHashes[extensionURL] = newHash
-        if (oldHash && oldHash !== newHash && this.securityManager.shouldUseLocal(extensionURL)) return Promise.reject('useLocal') 
+        if (oldHash && oldHash !== newHash && this.securityManager.shouldUseLocal(extensionURL)) return Promise.reject('useLocal')
 
         if (sandboxMode === 'unsandboxed') {
             const { load } = require('./tw-unsandboxed-extension-runner');
@@ -535,7 +551,7 @@ class ExtensionManager {
         /* eslint-enable max-len */
 
         return new Promise((resolve, reject) => {
-            this.pendingExtensions.push({ extensionURL: blobUrl, resolve, reject });
+            this.pendingExtensions.push({ extensionURL: rewritten, resolve, reject });
             dispatch.addWorker(new ExtensionWorker());
         }).catch(error => this._failedLoadingExtensionScript(error));
     }
@@ -596,7 +612,9 @@ class ExtensionManager {
 
     prepareSwap(id) {
         const serviceName = this._loadedExtensions.get(id);
-        dispatch.call(serviceName, 'dispose');
+        const { provider, isRemote } = dispatch._getServiceProvider(serviceName);
+        if (isRemote || typeof provider.dispose === 'function') 
+            dispatch.call(serviceName, 'dispose');
         delete dispatch.services[serviceName];
         delete this.runtime[`ext_${id}`];
 
@@ -606,7 +624,9 @@ class ExtensionManager {
     }
     removeExtension(id) {
         const serviceName = this._loadedExtensions.get(id);
-        dispatch.call(serviceName, 'dispose');
+        const { provider, isRemote } = dispatch._getServiceProvider(serviceName);
+        if (isRemote || typeof provider.dispose === 'function') 
+            dispatch.call(serviceName, 'dispose');
         delete dispatch.services[serviceName];
         delete this.runtime[`ext_${id}`];
 
@@ -615,6 +635,37 @@ class ExtensionManager {
         delete this.workerURLs[workerId];
         dispatch.call('runtime', '_removeExtensionPrimitive', id);
         this.refreshBlocks();
+    }
+    getExtensionIdFromOpcode(opcode) {
+        // Allowed ID characters are those matching the regular expression [\w-]: A-Z, a-z, 0-9, and hyphen ("-").
+        if (!(typeof opcode === 'string')) {
+            console.error('invalid opcode ' + opcode);
+            return '';
+        }
+        const index = opcode.indexOf('_');
+        const forbiddenSymbols = /[^\w-]/g;
+        const prefix = opcode.substring(0, index).replace(forbiddenSymbols, '-');
+        if (CORE_EXTENSIONS.indexOf(prefix) === -1) {
+            if (prefix !== '') return prefix;
+        }
+    }
+    findUsedExtensions() {
+        const results = [];
+        for (const target of this.runtime.targets) {
+            for (const blockId in target.blocks._blocks) {
+                const block = target.blocks.getBlock(blockId);
+                const ext = this.getExtensionIdFromOpcode(block.opcode);
+                results.push(ext);
+            }
+        }
+        return results;
+    }
+    removeUnusedExtensions() {
+        const all = [...this._loadedExtensions.keys()];
+        const used = this.findUsedExtensions();
+        const unused = all.filter(ext => !used.includes(ext));
+        for (const toRemove of unused)
+            this.removeExtension(toRemove);
     }
 
     allocateWorker() {
@@ -841,7 +892,7 @@ class ExtensionManager {
             blockInfo.xml = String(blockInfo.xml) || '';
             return blockInfo;
         }
-        
+
         blockInfo = Object.assign({}, {
             blockType: BlockType.COMMAND,
             terminal: false,
@@ -948,7 +999,8 @@ class ExtensionManager {
                 }
                 // TODO: filter args using the keys of realBlockInfo.arguments? maybe only if sandboxed?
                 const returnValue = callBlockFunc(args, util, realBlockInfo);
-                if (!visualReport && (returnValue?.value ?? false)) return returnValue.value;
+                const isCustomAPI = (returnValue?.value ?? false) && (returnValue?.constructor?.name !== "Object");
+                if (!visualReport && isCustomAPI) return returnValue.value;
                 return returnValue;
             };
             break;
