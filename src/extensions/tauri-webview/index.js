@@ -3,6 +3,14 @@
 const ArgumentType = require('../../extension-support/argument-type');
 const BlockType = require("../../extension-support/block-type");
 
+const BlockShape = require("../../extension-support/block-shape");
+
+/**
+ * Checks if the global tauri API exists.
+ * @returns {boolean} true if global tauri exists, false overwise.
+ */
+const hasTauri = () => '__TAURI__' in window;
+
 /**
  * Parse a URL object or return null.
  * @param {string} url The url to parse.
@@ -38,9 +46,61 @@ const uid = function () {
     return id.join('');
 };
 
+class Window {
+    constructor(webviewWindow) {
+        if (!hasTauri()) throw new Error("Could not find the tauri api!");
+
+        const TAURI = window.__TAURI__;
+        const WebviewWindow = TAURI.webviewWindow.WebviewWindow;
+
+        if (!(webviewWindow instanceof WebviewWindow)) throw new Error('Invalid window.');
+
+        this.__access__ = webviewWindow;
+
+        this.open = true;
+        this.__access__.onCloseRequested(() => {
+            this.open = false;
+        });
+    }
+
+    /**
+     * Checks if the object is a window
+     * @param {object} window The (possible) window
+     * @returns {boolean} Returns true if the input was a window.
+     */
+    static is(window) {
+        return window instanceof Window;
+    }
+    static new(label, options) {
+        if (!hasTauri()) throw new Error("Could not find the tauri api!");
+
+        const TAURI = window.__TAURI__;
+        const WebviewWindow = TAURI.webviewWindow.WebviewWindow;
+
+        const webviewWindow = new WebviewWindow(label, options);
+        return new Window(webviewWindow);
+    }
+    static existing(window) {
+        if (!hasTauri()) throw new Error("Could not find the tauri api!");
+
+        return new Window(window);
+    }
+
+    toString() {
+        return '<WebviewWindow>';
+    }
+}
+
 class TauriWebview {
     constructor(runtime) {
         this.securityManager = runtime.vm.securityManager;
+
+        if (!hasTauri()) throw new Error("Could not find the tauri api!");
+
+        const TAURI = window.__TAURI__;
+        const currentWindow = TAURI.webviewWindow.getCurrentWebviewWindow();
+
+        this.currentWindow = Window.existing(currentWindow);
     }
 
     getInfo() {
@@ -50,12 +110,56 @@ class TauriWebview {
             color1: '#4C98E4',
             blocks: [
                 {
-                    blockType: BlockType.LABEL,
-                    text: 'Windows'
-                },
-                {
                     opcode: 'open',
                     blockType: BlockType.COMMAND,
+                    text: 'open a window titled [TITLE] at [URL] and [WAIT] until closed',
+                    arguments: {
+                        URL: {
+                            type: ArgumentType.STRING,
+                            defaultValue: 'https://google.com'
+                        },
+                        TITLE: {
+                            type: ArgumentType.STRING,
+                            defaultValue: 'New Window'
+                        },
+                        WAIT: {
+                            type: ArgumentType.STRING,
+                            menu: 'WAIT'
+                        }
+                    }
+                },
+                {
+                    opcode: 'openWithSize',
+                    blockType: BlockType.COMMAND,
+                    text: 'open a window titled [TITLE] at [URL] with width [WIDTH] height [HEIGHT]'
+                        + ' and [WAIT] until closed',
+                    arguments: {
+                        URL: {
+                            type: ArgumentType.STRING,
+                            defaultValue: 'https://google.com'
+                        },
+                        TITLE: {
+                            type: ArgumentType.STRING,
+                            defaultValue: 'New Window'
+                        },
+                        WIDTH: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: 1440
+                        },
+                        HEIGHT: {
+                            type: ArgumentType.NUMBER,
+                            defaultValue: 810
+                        },
+                        WAIT: {
+                            type: ArgumentType.STRING,
+                            menu: 'WAIT'
+                        }
+                    }
+                },
+                {
+                    opcode: 'openReporter',
+                    blockType: BlockType.REPORTER,
+                    blockShape: BlockShape.SQUARE,
                     text: 'open a window titled [TITLE] at [URL]',
                     arguments: {
                         URL: {
@@ -69,8 +173,9 @@ class TauriWebview {
                     }
                 },
                 {
-                    opcode: 'openWithSize',
-                    blockType: BlockType.COMMAND,
+                    opcode: 'openWithSizeReporter',
+                    blockType: BlockType.REPORTER,
+                    blockShape: BlockShape.SQUARE,
                     text: 'open a window titled [TITLE] at [URL] with width [WIDTH] and height [HEIGHT]',
                     arguments: {
                         URL: {
@@ -90,13 +195,51 @@ class TauriWebview {
                             defaultValue: 810
                         }
                     }
+                },
+                "---",
+                {
+                    opcode: 'getCurrentWindow',
+                    blockType: BlockType.REPORTER,
+                    text: 'get current window',
+                    disableMonitor: true
+                },
+                "---",
+                {
+                    opcode: 'is',
+                    blockType: BlockType.BOOLEAN,
+                    text: 'is [WINDOW] [OPT]?',
+                    arguments: {
+                        WINDOW: {
+                            exemptFromNormalization: true
+                        },
+                        OPT: {
+                            type: ArgumentType.STRING,
+                            menu: 'IS_OPT'
+                        }
+                    }
+                },
+                {
+                    opcode: 'close',
+                    blockType: BlockType.COMMAND,
+                    text: 'close [WINDOW]',
+                    arguments: {
+                        WINDOW: {
+                            exemptFromNormalization: true
+                        }
+                    }
                 }
-            ]
+            ],
+            menus: {
+                WAIT: {
+                    acceptReporters: false,
+                    items: ["don't wait", "wait"]
+                },
+                IS_OPT: {
+                    acceptReporters: true,
+                    items: ["open", "focused"]
+                }
+            }
         };
-    }
-
-    hasTauri() {
-        return '__TAURI__' in window;
     }
 
     async requestPermission(url) {
@@ -112,27 +255,116 @@ class TauriWebview {
         return await this.securityManager.canOpenWindow(parsed.href);
     }
 
-    async open({ URL, TITLE }) {
-        await this.openWithSize({ URL, TITLE, WIDTH: 1440, HEIGHT: 810 });
+    /**
+     * Opens a window with the specified url, title, width, and height.
+     * @param {string} url URL to be opened.
+     * @param {string} title Title of the new window.
+     * @param {number} width Width of the new window.
+     * @param {number} height Height of the new window.
+     * @param {"don't wait" | "wait"} wait Whether or not to wait until the window has closed.
+     * @returns {Promise<Window>} Returns the window which was opened.
+     */
+    async _open(url, title, width, height, wait) {
+        return new Promise(async (resolve, reject) => {
+            if (!hasTauri()) return reject("Could not find the tauri api!");
+            if (!(await this.requestPermission(url))) return reject("Permission to open the site was denied!");
+        
+            // Open a new webview with default permissions
+
+            const label = `project-${uid()}`;
+
+            const newWindow = Window.new(label, {
+                url: url,
+                title: title,
+                focus: true,
+
+                height: height,
+                width: width
+            });
+
+            if (wait === "don't wait") {
+                resolve(newWindow);
+                return;
+            }
+
+            // Listen for window closed event
+            const unlisten = await newWindow.window.onCloseRequested(() => {
+                unlisten();
+                resolve(newWindow); 
+            });
+        });
     }
 
-    async openWithSize({ URL, TITLE, WIDTH, HEIGHT }) {
-        if (!this.hasTauri()) throw new Error("Could not find the tauri api!");
-        if (!(await this.requestPermission(URL))) throw new Error("Permission to open the site was denied!");
-        
-        // Open a new webview with default permissions
-        
-        const TAURI = window.__TAURI__;
-        const WebviewWindow = TAURI.webviewWindow.WebviewWindow;
+    /**
+     * Opens a window with the specified url and title.
+     * @param {*} param0 The block's arguments.
+     */
+    async open({ URL, TITLE, WAIT }) {
+        await this._open(URL, TITLE, 1440, 810, WAIT);
+    }
 
-        const _ = new WebviewWindow(`project-${uid()}`, {
-            url: URL,
-            title: TITLE,
-            focus: true,
+    /**
+     * Opens a window with the specified url, title, width, and height.
+     * @param {*} param0 The block's arguments
+     */
+    async openWithSize({ URL, TITLE, WIDTH, HEIGHT, WAIT }) {
+        await this._open(URL, TITLE, WIDTH, HEIGHT, WAIT);
+    }
 
-            height: HEIGHT,
-            width: WIDTH
-        });
+    /**
+     * Opens a window with the specified url and title.
+     * @param {*} param0 The block's arguments.
+     * @returns {Promise<Window>} Returns the window which was opened.
+     */
+    async openReporter({ URL, TITLE }) {
+        return await this._open(URL, TITLE, 1440, 810, "don't wait");
+    }
+
+    /**
+     * Opens a window with the specified url, title, width, and height.
+     * @param {*} param0 The block's arguments
+     * @returns {Promise<Window>} Returns the window which was opened.
+     */
+    async openWithSizeReporter({ URL, TITLE, WIDTH, HEIGHT }) {
+        return await this._open(URL, TITLE, WIDTH, HEIGHT, "don't wait");
+    }
+
+    /**
+     * Returns the current window
+     * @returns {Window} The current window
+     */
+    getCurrentWindow() {
+        return this.currentWindow;
+    }
+
+    /**
+     * Checks a window's properties based on the specified OPT
+     * @param {*} param0 The block's arguments
+     * @returns {boolean} Whether or not all checks where passed successfully.
+     */
+    is({ WINDOW, OPT }) {
+        if (!Window.is(WINDOW)) return false;
+
+        switch (OPT) {
+        case 'open': {
+            return WINDOW.open;
+        }
+        case 'focused': {
+            return WINDOW.__access__.isFocused();
+        }
+        default: {
+            return false;
+        }
+        }
+    }
+
+    /**
+     * Closes the window
+     * @param {*} param0 The block's arguments 
+     */
+    close({ WINDOW }) {
+        if (Window.is(WINDOW))
+            WINDOW.__access__.close();
     }
 }
 
