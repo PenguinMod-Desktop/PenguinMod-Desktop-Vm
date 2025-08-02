@@ -9,24 +9,54 @@ const BlockShape = {
     HEXAGONAL: 1,
 
     /**
-     * Output shape: rounded (numbers).
+     * Output shape: rounded (numbers/strings).
      */
     ROUND: 2,
 
     /**
-     * Output shape: squared (any/all values; strings).
+     * Output shape: squared (arrays/array buffers/uint arrays).
      */
     SQUARE: 3,
 
     /**
-     * Output shape: leaf-ed (custom shape thatl ooks cool).
+     * pm: Output shape: leaf-ed (vectors).
      */
     LEAF: 4,
 
     /**
-     * Output shape: plus (custom).
+     * pm: Output shape: plus (objects/classes or class instances).
      */
     PLUS: 5,
+
+    /**
+     * pm: Output shape: octagonal (Scratch targets).
+     */
+    OCTAGONAL: 6,
+
+    /**
+     * pm: Output shape: bumped (BigInt).
+     */
+    BUMPED: 7,
+
+    /**
+     * pm: Output shape: indented (Symbols).
+     */
+    INDENTED: 8,
+
+    /**
+     * pm: Output shape: scrapped (Maps).
+     */
+    SCRAPPED: 9,
+
+    /**
+     * pm: Output shape: arrow (Sets).
+     */
+    ARROW: 10,
+
+    /**
+     * pm: Output shape: ticket (Dates).
+     */
+    TICKET: 11,
 };
 
 module.exports = BlockShape;

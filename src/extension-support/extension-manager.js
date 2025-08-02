@@ -164,6 +164,8 @@ const defaultBuiltinExtensions = {
     jwColor: () => require("../extensions/jwColor"),
     // access to extraFiles
     jwStorage: () => require("../extensions/jwStorage"),
+    // date type
+    jwDate: () => require("../extensions/jwDate"),
 
     // jw: They'll think its made by jwklong >:)
     // (but it's not (yet (maybe (probably not (but its made by ianyourgod)))))
@@ -202,6 +204,7 @@ const defaultBuiltinExtensions = {
     // sharkpool: insert sharkpools epic introduction here
     // sharkpoolPrinting: ...
     sharkpoolPrinting: () => require("../extensions/sharkpool_printing"),
+    SPjavascriptV2: () => require("../extensions/sp_javascriptV2"),
 
     // silvxrcat: ...
     // oddMessage: ...
@@ -573,41 +576,59 @@ class ExtensionManager {
     }
 
     /**
-     * Regenerate blockinfo for all loaded dynamic extensions
+     * Regenerate blockinfo for all (or one) loaded dynamic extensions
+     * @param {string} [extension] optional extension id
      * @returns {Promise} resolved once all the extensions have been reinitialized
      */
-    refreshDynamicCategorys() {
-        if (!this._loadedExtensions) return Promise.reject('_loadedExtensions is not readable yet');
-        const allPromises = Array.from(this._loadedExtensions.values()).map(serviceName =>
-            dispatch.call(serviceName, 'getInfo')
+    refreshDynamicCategorys(extension) {
+        const refresh_service = service =>
+            dispatch.call(service, 'getInfo')
                 .then(info => {
-                    info = this._prepareExtensionInfo(serviceName, info);
+                    info = this._prepareExtensionInfo(service, info);
                     if (!info.isDynamic) return;
                     dispatch.call('runtime', '_refreshExtensionPrimitives', info);
                 })
                 .catch(e => {
                     log.error(`Failed to refresh built-in extension primitives: ${e}`);
                 })
-        );
-        return Promise.all(allPromises);
+
+        if (!this._loadedExtensions) return Promise.reject('_loadedExtensions is not readable yet');
+        if (!extension) {
+            const all_services = Array.from(this._loadedExtensions.values()).map(refresh_service);
+            return Promise.all(all_services);
+        }
+        if (!this._loadedExtensions.has(extension)) {
+            return Promise.reject(new Error(`Unknown extension: ${extension}`));
+        }
+
+        return refresh_service(this._loadedExtensions.get(extension));
     }
 
     /**
-     * Regenerate blockinfo for any loaded extensions
+     * Regenerate blockinfo for all (or one) loaded extensions
+     * @param {string} [extension] optional extension id
      * @returns {Promise} resolved once all the extensions have been reinitialized
      */
-    refreshBlocks() {
-        const allPromises = Array.from(this._loadedExtensions.values()).map(serviceName =>
-            dispatch.call(serviceName, 'getInfo')
+    refreshBlocks(extension) {
+        const refresh_service = service =>
+            dispatch.call(service, 'getInfo')
                 .then(info => {
-                    info = this._prepareExtensionInfo(serviceName, info);
+                    info = this._prepareExtensionInfo(service, info);
                     dispatch.call('runtime', '_refreshExtensionPrimitives', info);
                 })
                 .catch(e => {
                     log.error(`Failed to refresh built-in extension primitives: ${e}`);
-                })
-        );
-        return Promise.all(allPromises);
+                });
+
+        if (!extension) {
+            const all_services = Array.from(this._loadedExtensions.values()).map(refresh_service);
+            return Promise.all(all_services);
+        }
+        if (!this._loadedExtensions.has(extension)) {
+            return Promise.reject(new Error(`Unknown extension: ${extension}`));
+        }
+
+        return refresh_service(this._loadedExtensions.get(extension));
     }
 
     prepareSwap(id) {
@@ -789,7 +810,7 @@ class ExtensionManager {
                 results.push(result);
             } catch (e) {
                 // TODO: more meaningful error reporting
-                log.error(`Error processing block: ${e.message}, Block:\n${JSON.stringify(blockInfo)}`);
+                log.error(`Error processing block: ${e.message}, Block:\n${JSON.stringify(blockInfo)}`, e);
             }
             return results;
         }, []);
@@ -962,6 +983,10 @@ class ExtensionManager {
 
                 // avoid promise latency if we can call direct
                 const serviceObject = dispatch.services[serviceName];
+                if (!serviceObject) {
+                    // extension was likely removed
+                    return () => {};
+                }
                 if (!serviceObject[funcName]) {
                     // The function might show up later as a dynamic property of the service object
                     log.warn(`Could not find extension block function called ${funcName}`);

@@ -1145,6 +1145,14 @@ class Runtime extends EventEmitter {
     }
 
     /**
+     * Event name for thread finishing.
+     * @const {string}
+     */
+    static get THREAD_FINISHED () {
+        return 'THREAD_FINISHED'
+    }
+
+    /**
      * How rapidly we try to step threads by default, in ms.
      */
     static get THREAD_STEP_INTERVAL () {
@@ -1333,6 +1341,9 @@ class Runtime extends EventEmitter {
             categoryInfo.color2 = defaultExtensionColors[1];
             categoryInfo.color3 = defaultExtensionColors[2];
         }
+
+        // undefined will default to the regular text color
+        categoryInfo.blockText = extensionInfo.blockText;
 
         if (extensionInfo.isDynamic) {
             categoryInfo.isDynamic = extensionInfo.isDynamic;
@@ -1641,6 +1652,7 @@ class Runtime extends EventEmitter {
             colour: blockInfo.color1 ?? categoryInfo.color1,
             colourSecondary: blockInfo.color2 ?? categoryInfo.color2,
             colourTertiary: blockInfo.color3 ?? categoryInfo.color3,
+            blockText: blockInfo.blockText ?? categoryInfo.blockText,
             canDragDuplicate: blockInfo.canDragDuplicate === true
         };
         const context = {
@@ -1789,8 +1801,7 @@ class Runtime extends EventEmitter {
         else if (typeof blockShape === 'string') {
             // assume we are handling a custom shape...
             // if it doesnt exist it will default to a round reporter
-            if (blockShape.startsWith('native-')) blockJSON.outputShape = blockShape;
-            else if (!blockShape.startsWith('custom-')) blockJSON.outputShape = 'custom-' + blockShape;
+            if (!blockShape.startsWith('custom-')) blockJSON.outputShape = 'custom-' + blockShape;
             else blockJSON.outputShape = blockShape;
         }
         if (blockInfo.forceOutputType) {
@@ -1970,14 +1981,13 @@ class Runtime extends EventEmitter {
                 // shaped like a hexagon
                 argJSON.check = argInfo.check || argTypeInfo.check;
             }
-            const argShape = argInfo.shape;
+            const argShape = argTypeInfo.shape || argInfo.shape;
             if (argShape) {
                 if (typeof argShape === 'number') argJSON.shape = argShape;
                 else {
                     // assume we are handling a custom shape...
                     // if it doesnt exist it will default to a null input
-                    if (argShape.startsWith('native-')) argJSON.shape = argShape;
-                    else if (!argShape.startsWith('custom-')) argJSON.shape = 'custom-' + argShape;
+                    if (!argShape.startsWith('custom-')) argJSON.shape = 'custom-' + argShape;
                     else argJSON.shape = argShape;
                 }
             }
@@ -2938,6 +2948,7 @@ class Runtime extends EventEmitter {
             this._stopThread(this.sequencer.activeThread);
         }
         // Remove all remaining threads from executing in the next tick.
+        this.threads.forEach(v => v.status !== Thread.STATUS_DONE && this.emit(Runtime.THREAD_FINISHED, v))
         this.threads = [];
         this.threadMap.clear();
     }
