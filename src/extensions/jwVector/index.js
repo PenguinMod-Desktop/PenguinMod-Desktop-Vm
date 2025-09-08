@@ -1,6 +1,7 @@
 const BlockType = require('../../extension-support/block-type')
 const BlockShape = require('../../extension-support/block-shape')
 const ArgumentType = require('../../extension-support/argument-type')
+const TargetType = require('../../extension-support/target-type')
 const Cast = require('../../util/cast')
 
 /**
@@ -276,7 +277,71 @@ class Extension {
                     },
                     ...Vector.Block
                 },
-            ]
+                {
+                    opcode: 'round',
+                    text: '[ROUNDING] of [VECTOR]',
+                    arguments: {
+                        ROUNDING: {
+                            menu: 'roundingFunctions',
+                        },
+                        VECTOR: Vector.Argument
+                    },
+                    ...Vector.Block
+                },
+                "---",
+                {
+                    opcode: 'getPos',
+                    text: 'position',
+                    extensions: ["colours_motion"],
+                    filter: [TargetType.SPRITE],
+                    ...Vector.Block
+                },
+                {
+                    opcode: 'setPos',
+                    text: 'set position to [VECTOR]',
+                    arguments: {
+                        VECTOR: Vector.Argument
+                    },
+                    extensions: ["colours_motion"],
+                    filter: [TargetType.SPRITE]
+                },
+                "---",
+                {
+                    opcode: 'getStretch',
+                    text: 'stretch',
+                    extensions: ["colours_looks"],
+                    filter: [TargetType.SPRITE],
+                    ...Vector.Block
+                },
+                {
+                    opcode: 'setStretch',
+                    text: 'set stretch to [VECTOR]',
+                    arguments: {
+                        VECTOR: Vector.Argument
+                    },
+                    extensions: ["colours_looks"],
+                    filter: [TargetType.SPRITE]
+                }
+            ],
+            menus: {
+                roundingFunctions: {
+                    acceptReporters: false,
+                    items: [
+                        {
+                            text: 'round',
+                            value: 'round'
+                        },
+                        {
+                            text: 'ceil', // might as well go full in on the inconsistencies since we are already doing "round of"
+                            value: 'ceil'
+                        },
+                        {
+                            text: 'floor',
+                            value: 'floor'
+                        }
+                    ]
+                },
+            }
         };
     }
 
@@ -371,6 +436,43 @@ class Extension {
             v.x * cos - v.y * sin,
             v.x * sin + v.y * cos
         )
+    }
+
+    round(args) {
+        const v = VectorType.toVector(args.VECTOR)
+        const r = Cast.toString(args.ROUNDING)
+
+        switch (r) {
+            case 'floor':
+                return new VectorType(Math.floor(v.x), Math.floor(v.y))
+            case 'ceil':
+                return new VectorType(Math.ceil(v.x), Math.ceil(v.y))
+        }
+
+        return new VectorType(Math.round(v.x), Math.round(v.y))
+    }
+    
+    getPos({}, util) {
+        return new Vector.Type(
+            util.target.x,
+            util.target.y
+        )
+    }
+
+    setPos({VECTOR}, util) {
+        VECTOR = Vector.Type.toVector(VECTOR)
+
+        util.target.setXY(VECTOR.x, VECTOR.y)
+    }
+
+    getStretch({}, util) {
+        return new Vector.Type(...util.target.stretch)
+    }
+
+    setStretch({VECTOR}, util) {
+        VECTOR = Vector.Type.toVector(VECTOR)
+
+        util.target.setStretch(VECTOR.x, VECTOR.y)
     }
 }
 

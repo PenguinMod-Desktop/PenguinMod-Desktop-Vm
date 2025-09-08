@@ -460,9 +460,17 @@ class Blocks {
                 this._blocks[e.blockId].shadow) {
                 return;
             }
-            // Inform any runtime to forget about glows on this script.
+            // If this block is the initial block of a script, inform any runtime to forget about glows
+            // as well as force end the script (if in compiler)
             if (this._blocks[e.blockId].topLevel) {
                 this.runtime.quietGlow(e.blockId);
+                if (this.runtime.compilerOptions.enabled) setTimeout(() => {
+                    // slighlty delay script end to handle tab switching vs real block deletion
+                    if (!this._blocks[e.blockId]) {
+                        const thread = this.runtime.threads.find(t => t.getId() === `${editingTarget.id}&${e.blockId}`);
+                        if (thread) this.runtime._stopThread(thread);
+                    }
+                }, 100);
             }
             this.deleteBlock(e.blockId);
             break;
@@ -1097,17 +1105,28 @@ class Blocks {
      * 'backdrop'.
      */
     updateAssetName (oldName, newName, assetType) {
+        let target = this.runtime.getEditingTarget();
         let getAssetField;
-        if (assetType === 'costume') {
+        let eventName;
+        switch (assetType) {
+          case 'costume':
+            eventName = 'COSTUME_RENAMED';
             getAssetField = this._getCostumeField.bind(this);
-        } else if (assetType === 'sound') {
-            getAssetField = this._getSoundField.bind(this);
-        } else if (assetType === 'backdrop') {
+            break;
+          case 'backdrop':
+            target = this.runtime.getTargetForStage();
+            eventName = 'COSTUME_RENAMED';
             getAssetField = this._getBackdropField.bind(this);
-        } else if (assetType === 'sprite') {
+            break;
+          case 'sound':
+            eventName = 'SOUND_RENAMED';
+            getAssetField = this._getSoundField.bind(this);
+            break;
+          case 'sprite':
+            eventName = 'SPRITE_RENAMED';
             getAssetField = this._getSpriteField.bind(this);
-        } else {
-            return;
+            break;
+          default: return
         }
         const blocks = this._blocks;
         for (const blockId in blocks) {
@@ -1117,6 +1136,11 @@ class Blocks {
             }
         }
         this.resetCache();
+        this.runtime.emit(
+          eventName,
+          { "old": oldName, "new": newName },
+          target
+        );
     }
 
     /**

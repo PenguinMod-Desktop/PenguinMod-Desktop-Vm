@@ -17,10 +17,38 @@ ${blockSeparator}
 %b34> ` +/* or if falsey */`
 %b35> ` +/* if is true */`
 ${blockSeparator}
-<block type="operator_nand" />
-<block type="operator_nor" />
-<block type="operator_xor" />
-<block type="operator_xnor" />
+<block type="operator_nand">
+    <value name="OPERAND1">
+        <shadow type="checkbox" />
+    </value>
+    <value name="OPERAND2">
+        <shadow type="checkbox" />
+    </value>
+</block>
+<block type="operator_nor">
+    <value name="OPERAND1">
+        <shadow type="checkbox" />
+    </value>
+    <value name="OPERAND2">
+        <shadow type="checkbox" />
+    </value>
+</block>
+<block type="operator_xor">
+    <value name="OPERAND1">
+        <shadow type="checkbox" />
+    </value>
+    <value name="OPERAND2">
+        <shadow type="checkbox" />
+    </value>
+</block>
+<block type="operator_xnor">
+    <value name="OPERAND1">
+        <shadow type="checkbox" />
+    </value>
+    <value name="OPERAND2">
+        <shadow type="checkbox" />
+    </value>
+</block>
 <block type="operator_randomBoolean" />
 ${blockSeparator}
 %b20> ` +/* evaluate math expression */`
@@ -102,43 +130,6 @@ ${blockSeparator}
 %b32> ` +/* speed to pitch */`
 %b33> ` +/* pitch to speed */`
 ${blockSeparator}
-` +/* join blocks */`
-<block type="operator_join">
-    <value name="STRING1">
-        <shadow type="text">
-            <field name="TEXT">apple </field>
-        </shadow>
-    </value>
-    <value name="STRING2">
-        <shadow type="text">
-            <field name="TEXT">banana</field>
-        </shadow>
-    </value>
-</block>
-<block type="operator_join3">
-    <value name="STRING1">
-        <shadow type="text">
-            <field name="TEXT">apple </field>
-        </shadow>
-    </value>
-    <value name="STRING2">
-        <shadow type="text">
-            <field name="TEXT">banana </field>
-        </shadow>
-    </value>
-    <value name="STRING3">
-        <shadow type="text">
-            <field name="TEXT">pear</field>
-        </shadow>
-    </value>
-</block>
-` +/* extreme join blocks */`
-%b0>
-%b1>
-%b2>
-%b3>
-%b4>
-%b5>
 ` +/* constants */`
 ${blockSeparator}
 %b8> ` +/* pi */`
@@ -954,7 +945,7 @@ class pmOperatorsExpansion {
                     return new TypedInput(`(${num1} || ${num2})`, TYPE_UNKNOWN);
                 },
                 ifIsTruthy: (node, compiler, {TypedInput, TYPE_UNKNOWN}) => {
-                    const num1 = compiler.descendInput(node.one).asUnknown();
+                    const num1 = compiler.descendInput(node.one).asBoolean();
                     const num2 = compiler.descendInput(node.two).asUnknown();
 
                     return new TypedInput(`(${num1} && ${num2})`, TYPE_UNKNOWN);

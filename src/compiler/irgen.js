@@ -212,6 +212,11 @@ class ScriptTreeGenerator {
                 kind: 'constant',
                 value: block.fields.TEXT.value
             };
+        case 'checkbox':
+            return {
+                kind: 'constant',
+                value: block.fields.CHECKBOX.value == "TRUE"
+            };
         case 'polygon':
             const points = [];
             for (let point = 1; point <= block.mutation.points; point++) {
@@ -221,7 +226,7 @@ class ScriptTreeGenerator {
                     x: this.descendInputOfBlock(block, xn),
                     y: this.descendInputOfBlock(block, yn)
                 });
-            }
+            };
             return {
                 kind: 'math.polygon',
                 points
@@ -255,17 +260,13 @@ class ScriptTreeGenerator {
             const name = block.fields.VALUE.value;
             const index = this.script.arguments.lastIndexOf(name);
             if (index === -1) {
-                if (name.toLowerCase() === 'is compiled?' || 
-                    name.toLowerCase() === 'is turbowarp?' || 
-                    name.toLowerCase() === 'is penguinmod or turbowarp?') {
-                    return {
-                        kind: 'constant',
-                        value: true
-                    };
-                }
+                const nameCheck = name.toLowerCase();
+                const bool = nameCheck === 'is compiled?' || nameCheck === 'is penguinmod?' ||
+                    nameCheck === 'is penguinmod or turbowarp?';
+                // 'is turbowarp?' will return false since this is penguinmod, duh
                 return {
                     kind: 'constant',
-                    value: 0
+                    value: bool
                 };
             }
             return {
@@ -434,6 +435,23 @@ class ScriptTreeGenerator {
                 left: this.descendInputOfBlock(block, 'NUM1'),
                 right: this.descendInputOfBlock(block, 'NUM2')
             };
+        case 'operator_expandableMath': {
+            const menuOperators = block.mutation.menuvalues;
+            const inputs = Object.values(block.inputs);
+            const operations = [];
+            for (var i = 0; i < inputs.length; i++) {
+                const input = inputs[i];
+                if (input.block == null) delete block.inputs[input.name];
+                else operations.push([
+                  this.descendInputOfBlock(block, input.name),
+                  menuOperators[i]
+                ]);
+            }
+            return {
+                kind: 'op.expandmath',
+                operations
+            };
+        }
         case 'operator_equals':
             return {
                 kind: 'op.equals',
@@ -452,6 +470,17 @@ class ScriptTreeGenerator {
                 left: this.descendInputOfBlock(block, 'STRING1'),
                 right: this.descendInputOfBlock(block, 'STRING2')
             };
+        case "operator_expandablejoininputs": {
+            const strings = [];
+            for (const input of Object.values(block.inputs)) {
+                if (input.block == null) delete block.inputs[input.name];
+                else strings.push(this.descendInputOfBlock(block, input.name));
+            }
+            return {
+                kind: "op.expandjoin",
+                strings
+            };
+        }
         case 'operator_length':
             return {
                 kind: 'op.length',
@@ -1112,6 +1141,27 @@ class ScriptTreeGenerator {
                 whenTrue: this.descendSubstack(block, 'SUBSTACK'),
                 whenFalse: this.descendSubstack(block, 'SUBSTACK2')
             };
+        case 'control_expandableIf': {
+            const hasElse = block.mutation['ends-in-else'] === 'true';
+            const inputs = Object.values(block.inputs);
+            const branches = [];
+
+            for (var i = 0; i < inputs.length; i++) {
+                branches.push([
+                    this.descendInputOfBlock(block, inputs[i].name),
+                    this.descendSubstack(block, 'SUBSTACK' + i)
+                ]);
+            }
+            if (hasElse) branches.push([
+                undefined,
+                this.descendSubstack(block, 'SUBSTACK' + inputs.length)
+            ]);
+
+            return {
+                kind: 'control.expandableIf',
+                branches
+            };
+        }
         case 'control_try_catch':
             return {
                 kind: 'control.trycatch',
@@ -1601,7 +1651,7 @@ class ScriptTreeGenerator {
             return {
                 kind: 'procedures.return',
                 return: this.descendInputOfBlock(block, 'return'),
-                isDefineClicked: topBlock ? topBlock.opcode.startsWith("procedures_definition") : false
+                isDefineClicked: topBlock ? topBlock.opcode === "procedures_return" || topBlock.opcode.startsWith("procedures_definition") : false
             };
         }
         case 'procedures_set': 

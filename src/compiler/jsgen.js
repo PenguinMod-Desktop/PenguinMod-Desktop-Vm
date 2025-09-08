@@ -619,9 +619,9 @@ class JSGenerator {
             return new TypedInput(`${this.referenceVariable(node.list)}.value.length`, TYPE_NUMBER);
 
         case 'list.filteritem':
-            return new TypedInput('runtime.ext_scratch3_data._listFilterItem', TYPE_UNKNOWN);
+            return new TypedInput('(thread._listFilterItem ?? [""])[(thread._listFilterItem ?? [""]).length - 1]', TYPE_UNKNOWN);
         case 'list.filterindex':
-            return new TypedInput('runtime.ext_scratch3_data._listFilterIndex', TYPE_UNKNOWN);
+            return new TypedInput('(thread._listFilterIndex ?? [0])[(thread._listFilterIndex ?? [0]).length - 1]', TYPE_NUMBER);
 
         case 'looks.size':
             return new TypedInput('target.size', TYPE_NUMBER);
@@ -808,6 +808,12 @@ class JSGenerator {
         }
         case 'op.join':
             return new TypedInput(`(${this.descendInput(node.left).asString()} + ${this.descendInput(node.right).asString()})`, TYPE_STRING);
+        case "op.expandjoin": {
+            for (var i = 0; i < node.strings.length; i++) {
+                node.strings[i] = this.descendInput(node.strings[i]).asString();
+            }
+            return new TypedInput('(' + node.strings.join('+') + ')', TYPE_STRING);
+        }
         case 'op.length':
             return new TypedInput(`${this.descendInput(node.string).asString()}.length`, TYPE_NUMBER);
         case 'op.less': {
@@ -883,6 +889,31 @@ class JSGenerator {
             return new TypedInput(`tan(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER_NAN);
         case 'op.10^':
             return new TypedInput(`(10 ** ${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
+        case 'op.expandmath': {
+            const operations = node.operations;
+            let builder = '';
+            let powWrap = 0;
+            for (var i = 0; i < operations.length; i++) {
+                const op = operations[i];
+                const prevOp = operations[i - 1];
+                const opType = op[1];
+
+                if (opType === "^") {
+                    builder += 'Math.pow(';
+                    builder += this.descendInput(op[0]).asNumber();
+                    builder += ',';
+                    powWrap++;
+                } else {
+                    builder += this.descendInput(op[0]).asNumber();
+                    while (powWrap > 0) {
+                        builder += ')';
+                        powWrap--;
+                    }
+                    if (opType) builder += opType;
+                }
+            }
+            return new TypedInput('(' + builder + ')', TYPE_NUMBER_NAN);
+        }
 
         case 'sensing.answer':
             return new TypedInput(`runtime.ext_scratch3_sensing._answer`, TYPE_STRING);
@@ -1495,13 +1526,23 @@ class JSGenerator {
             break;
 
         case 'list.filter':
-            this.source += `${this.referenceVariable(node.list)}.value = ${this.referenceVariable(node.list)}.value.filter(function* (item, index) {`;
-            this.source += `    runtime.ext_scratch3_data._listFilterItem = item;\n`;
-            this.source += `    runtime.ext_scratch3_data._listFilterIndex = index + 1;\n`;
-            this.source += `    return ${this.descendInput(node.bool).asBoolean()};\n`;
-            this.source += `})`;
-            this.source += `runtime.ext_scratch3_data._listFilterItem = "";\n`;
-            this.source += `runtime.ext_scratch3_data._listFilterIndex = 0;\n`;
+            const filterOutput = this.localVariables.next();
+            this.source += `var ${filterOutput} = [];\n`
+            const cloneList = this.localVariables.next();
+            this.source += `var ${cloneList} = [...${this.referenceVariable(node.list)}.value];\n`
+            this.source += `thread._listFilterItem ??= [];\n`;
+            this.source += `thread._listFilterIndex ??= [];\n`;
+            this.source += `thread._listFilterItem.push("");\n`;
+            this.source += `thread._listFilterIndex.push(0);\n`;
+            let lastIndex = `thread._listFilterIndex[thread._listFilterIndex.length-1]`
+            let lastItem = `thread._listFilterItem[thread._listFilterItem.length-1]`
+            this.source += `for (${lastIndex} = 1; ${lastIndex} <= ${cloneList}.length; ${lastIndex}++) {\n`
+            this.source += `    ${lastItem} = ${cloneList}[${lastIndex} - 1];\n`;
+            this.source += `    if (${this.descendInput(node.bool).asBoolean()}) ${filterOutput}.push(${lastItem});\n`;
+            this.source += `};\n`;
+            this.source += `${this.referenceVariable(node.list)}.value = ${filterOutput};\n`;
+            this.source += `thread._listFilterItem.pop();\n`;
+            this.source += `thread._listFilterIndex.pop();\n`;
             break;
 
         case 'looks.backwardLayers':
