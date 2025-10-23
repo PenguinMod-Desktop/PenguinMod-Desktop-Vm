@@ -90,6 +90,18 @@ class ScriptTreeGenerator {
         this.variableCache = {};
 
         this.usesTimer = false;
+
+        this.debug = this.runtime.debug;
+    }
+
+    static addCompilerInfo(ir = {}, compilerInfo = {}) {
+        ir = {...ir} //clone
+        if (ir.compilerInfo) {
+            ir.compilerInfo = {...ir.compilerInfo, ...compilerInfo}
+        } else {
+            ir.compilerInfo = compilerInfo
+        }
+        return ir
     }
 
     setProcedureVariant (procedureVariant) {
@@ -146,7 +158,7 @@ class ScriptTreeGenerator {
             log.warn(`IR: ${parentBlock.opcode}: missing input ${inputName}`, parentBlock);
             return {
                 kind: 'constant',
-                value: 0
+                value: null
             };
         }
         const inputId = input.block;
@@ -155,7 +167,7 @@ class ScriptTreeGenerator {
             log.warn(`IR: ${parentBlock.opcode}: could not find input ${inputName} with ID ${inputId}`);
             return {
                 kind: 'constant',
-                value: 0
+                value: null
             };
         }
 
@@ -470,6 +482,7 @@ class ScriptTreeGenerator {
                 left: this.descendInputOfBlock(block, 'STRING1'),
                 right: this.descendInputOfBlock(block, 'STRING2')
             };
+        case "operators_expandablejoininputs":
         case "operator_expandablejoininputs": {
             const strings = [];
             for (const input of Object.values(block.inputs)) {
@@ -1078,11 +1091,13 @@ class ScriptTreeGenerator {
             };
         case 'control_exitLoop':
             return {
-                kind: 'control.exitLoop'
+                kind: 'control.exitLoop',
+                id: block.id
             };
         case 'control_continueLoop':
             return {
-                kind: 'control.continueLoop'
+                kind: 'control.continueLoop',
+                id: block.id
             };
         case 'control_all_at_once':
             // In Scratch 3, this block behaves like "if 1 = 1"
@@ -1142,20 +1157,29 @@ class ScriptTreeGenerator {
                 whenFalse: this.descendSubstack(block, 'SUBSTACK2')
             };
         case 'control_expandableIf': {
-            const hasElse = block.mutation['ends-in-else'] === 'true';
-            const inputs = Object.values(block.inputs);
-            const branches = [];
+            const branchCount = Number(block.mutation.branches);
+            const hasElse = block.mutation["ends-in-else"] === "true";
+            const branches = Array(branchCount).fill(null);
 
-            for (var i = 0; i < inputs.length; i++) {
-                branches.push([
-                    this.descendInputOfBlock(block, inputs[i].name),
-                    this.descendSubstack(block, 'SUBSTACK' + i)
-                ]);
+            // run normally if no extra branches
+            if (branchCount < 3 && (branchCount === 1 ? true : hasElse)) {
+                return {
+                    kind: 'control.if',
+                    condition: this.descendInputOfBlock(block, 'BOOL1'),
+                    whenTrue: this.descendSubstack(block, 'SUBSTACK1'),
+                    whenFalse: hasElse ? this.descendSubstack(block, 'SUBSTACK2') : []
+                };
             }
-            if (hasElse) branches.push([
-                undefined,
-                this.descendSubstack(block, 'SUBSTACK' + inputs.length)
-            ]);
+
+            for (var i = 1; i < branchCount + 1; i++) {
+                const name = 'SUBSTACK' + i;
+                const boolName = 'BOOL' + i;
+                const boolValue = this.descendInputOfBlock(block, boolName);
+                if (boolValue.value === null) {
+                    boolValue.value = i === branchCount && hasElse ? null : false;
+                }
+                branches[i - 1] = [boolValue, this.descendSubstack(block, name)];
+            }
 
             return {
                 kind: 'control.expandableIf',
@@ -1651,7 +1675,10 @@ class ScriptTreeGenerator {
             return {
                 kind: 'procedures.return',
                 return: this.descendInputOfBlock(block, 'return'),
-                isDefineClicked: topBlock ? topBlock.opcode === "procedures_return" || topBlock.opcode.startsWith("procedures_definition") : false
+                isDefineClicked: topBlock ? topBlock.opcode === "procedures_return" || topBlock.opcode.startsWith("procedures_definition") : false,
+                compilerInfo: {
+                    jwArrayUnmodified: true
+                }
             };
         }
         case 'procedures_set': 
@@ -2231,6 +2258,7 @@ class ScriptTreeGenerator {
         for (const name of Object.keys(block.inputs)) {
             if (!name.startsWith('SUBSTACK')) {
                 inputs[name] = this.descendInputOfBlock(block, name);
+                if (blockInfo && blockInfo.arguments[name]) inputs[name].compilerInfo = ScriptTreeGenerator.addCompilerInfo(inputs[name], blockInfo.arguments[name].compilerInfo)
             }
         }
 
@@ -2259,7 +2287,8 @@ class ScriptTreeGenerator {
             blockType,
             inputs,
             fields,
-            substacks
+            substacks,
+            compilerInfo: (blockInfo && blockInfo.compilerInfo) || {}
         };
     }
 
@@ -2395,6 +2424,10 @@ class ScriptTreeGenerator {
             if (entryBlock) {
                 this.script.stack = this.walkStack(entryBlock);
             }
+        }
+
+        if (this.debug) {
+            log.info(`IR: ${this.target.getName()}: compiled ${this.script.procedureCode || 'script'}`, this.script.stack);
         }
 
         return this.script;
