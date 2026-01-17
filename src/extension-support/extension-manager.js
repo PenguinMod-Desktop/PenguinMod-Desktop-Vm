@@ -170,6 +170,8 @@ const defaultBuiltinExtensions = {
     jwScope: () => require("../extensions/jwScope"),
     // NEW xml extension
     jwXML: () => require("../extensions/jwXML"),
+    // pointers
+    jwPointer: () => require("../extensions/jwPointer"),
 
     // jw: They'll think its made by jwklong >:)
     // (but it's not (yet (maybe (probably not (but its made by ianyourgod)))))
@@ -404,8 +406,8 @@ class ExtensionManager {
     /**
      * Determine whether an extension with a given ID is built in to the VM, such as pen.
      * Note that "core extensions" like motion will return false here.
-     * @param {string} extensionId
-     * @returns {boolean}
+     * @param {string} extensionId The extension id to check
+     * @returns {boolean} If the extension id is internal
      */
     isBuiltinExtension(extensionId) {
         return Object.prototype.hasOwnProperty.call(this.builtinExtensions, extensionId);
@@ -471,7 +473,7 @@ class ExtensionManager {
 
     /**
      * Load an extension by URL or internal extension ID
-     * @param {string} normalURL - the URL for the extension to load OR the ID of an internal extension
+     * @param {string} extensionURL - the URL for the extension to load OR the ID of an internal extension
      * @param {string|null} oldHash - included when loading, contains the known hash that is from the loaded file so it can be compared with the one gotten over the url
      * @returns {Promise} resolved once the extension is loaded and initialized or rejected on failure
      */
@@ -908,6 +910,7 @@ class ExtensionManager {
      * Apply defaults for optional block fields.
      * @param {string} serviceName - the name of the service hosting this extension block
      * @param {ExtensionBlockMetadata} blockInfo - the block info from the extension
+     * @param {object.<ExtensionMenuMetadata>} menus The menus from the extension
      * @returns {ExtensionBlockMetadata} - a new block info object which has values for all relevant optional fields.
      * @private
      */

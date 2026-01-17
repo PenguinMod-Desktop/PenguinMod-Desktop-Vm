@@ -56,16 +56,16 @@ const generatorNameVariablePool = new VariablePool('gen');
 
 /**
  * @typedef Input
- * @property {() => string} asNumber
- * @property {() => string} asNumberOrNaN
- * @property {() => string} asString
- * @property {() => string} asBoolean
- * @property {() => string} asColor
- * @property {() => string} asUnknown
- * @property {() => string} asSafe
- * @property {() => boolean} isAlwaysNumber
- * @property {() => boolean} isAlwaysNumberOrNaN
- * @property {() => boolean} isNeverNumber
+ * @property {Function} asNumber Returns string 
+ * @property {Function} asNumberOrNaN Returns string
+ * @property {Function} asString Returns string
+ * @property {Function} asBoolean Returns string
+ * @property {Function} asColor Returns string
+ * @property {Function} asUnknown Returns string
+ * @property {Function} asSafe Returns string
+ * @property {Function} isAlwaysNumber Returns boolean
+ * @property {Function} isAlwaysNumberOrNaN Returns boolean
+ * @property {Function} isNeverNumber Returns boolean
  */
 
 /**
@@ -386,9 +386,9 @@ class Frame {
 
 class JSGenerator {
     /**
-     * @param {IntermediateScript} script
-     * @param {IntermediateRepresentation} ir
-     * @param {Target} target
+     * @param {IntermediateScript} script The generated IR script
+     * @param {IntermediateRepresentation} ir The IR generator
+     * @param {Target} target The target to generate code for
      */
     constructor (script, ir, target) {
         this.script = script;
@@ -2040,8 +2040,8 @@ class JSGenerator {
 
     /**
      * Compile a Record of input objects into a safe JS string.
-     * @param {Record<string, unknown>} inputs
-     * @returns {string}
+     * @param {Record<string, unknown>} inputs The record to decend
+     * @returns {string} The stringified result
      */
     descendInputRecord (inputs) {
         let result = '{';

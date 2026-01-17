@@ -18,7 +18,12 @@ const base = {
         rules: [{
             test: /\.js$/,
             loader: 'babel-loader',
-            include: path.resolve(__dirname, 'src'),
+            include: [
+                path.resolve(__dirname, 'src'),
+                /node_modules[\\/]scratch-[^\\/]+[\\/]src/,
+                /node_modules[\\/]pify/,
+                /node_modules[\\/]@vernier[\\/]godirect/
+            ],
             query: {
                 presets: [['@babel/preset-env']]
             }
@@ -29,6 +34,11 @@ const base = {
             options: {
                 outputPath: 'media/music/'
             }
+        },
+        {
+            test: /\.(svg|png|wav|gif|jpg|mp3|ttf|otf|ico)$/,
+            loader: 'file-loader',
+            options: { outputPath: 'static/assets/' }
         }]
     },
     plugins: []
@@ -127,12 +137,6 @@ module.exports = [
             new CopyWebpackPlugin([{
                 from: 'node_modules/scratch-blocks/media',
                 to: 'media'
-            }, {
-                from: 'node_modules/scratch-storage/dist/web'
-            }, {
-                from: 'node_modules/scratch-render/dist/web'
-            }, {
-                from: 'node_modules/scratch-svg-renderer/dist/web'
             }, {
                 from: 'src/playground'
             }])
