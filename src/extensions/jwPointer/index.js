@@ -13,6 +13,15 @@ function span(text) {
     return el
 }
 
+const escapeHTML = unsafe => {
+    return unsafe
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;")
+};
+
 const pointerLimit = Number.MAX_SAFE_INTEGER;
 let currentPointerID = 0;
 
@@ -36,6 +45,7 @@ class PointerType {
     }
 
     static toPointer(x) {
+        console.debug(x)
         if (x instanceof PointerType) return x;
 
         let num = Cast.toNumber(x);
@@ -78,7 +88,7 @@ class PointerType {
     }
 
     toString() {
-        return Cast.toString(this.value);
+        return this.pointerID.toString();
     }
 
     toReporterContent() {
@@ -99,7 +109,7 @@ class PointerType {
                 } else if (this.value instanceof PointerType) {
                     value = span("(Pointer)")
                 } else {
-                    value = this.value.toReporterContent ? this.value.toReporterContent() : span(this.value)
+                    value = this.value.toReporterContent ? this.value.toReporterContent() : span(escapeHTML(Cast.toString(this.value)))
                 }
             } catch (e) {
                 value = span("(Recursive)")
@@ -117,13 +127,13 @@ const Pointer = {
     Block: {
         blockType: BlockType.REPORTER,
         forceOutputType: "Pointer",
-        disableMonitor: true
+        disableMonitor: true,
     },
     Argument: {
         check: ["Pointer"],
-        exemptFromNormalization: true
+        exemptFromNormalization: true,
+        neglectTypes: ["jwPointer"]
     },
-
     pointers
 };
 
@@ -190,7 +200,7 @@ class Extension {
                     arguments: {
                         ID: {
                             type: ArgumentType.NUMBER,
-                            defaultValue: 0
+                            defaultValue: 1
                         }
                     },
                     ...Pointer.Block
@@ -267,6 +277,14 @@ class Extension {
                     text: "last pointer ID",
                     blockType: BlockType.REPORTER
                 },
+                {
+                    opcode: "isPointer",
+                    text: "is [INPUT] a pointer?",
+                    blockType: BlockType.BOOLEAN,
+                    arguments: {
+                        INPUT: Pointer.Argument
+                    }
+                },
                 ...(vm.runtime.ext_jwArray ? ["---"] : []),
                 {
                     opcode: "allPointers",
@@ -342,6 +360,10 @@ class Extension {
 
     lastID() {
         return currentPointerID;
+    }
+
+    isPointer({POINTER}) {
+        return POINTER instanceof Pointer.Type
     }
 
     allPointers() {
