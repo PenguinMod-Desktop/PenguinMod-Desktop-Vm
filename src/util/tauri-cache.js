@@ -9,17 +9,19 @@ if (typeof TextEncoder === 'undefined') {
 class Cache {
     /**
      * Creates a new cache
-     * @param {String} fileName The name of the file used for the cache
+     * 
+     * @param {string} fileName the name of the file used for the cache
      */
     constructor(fileName) {
         this.file = fileName;
         this._data = {};
 
-        this._attemptLoadData();
+        this._promise = this._attemptLoadData();
     }
 
     /**
-     * Attempt to read from disk
+     * Attempt to read from disk.
+     * 
      * @private
      */
     async _attemptLoadData() {
@@ -32,14 +34,15 @@ class Cache {
         if (!doesExist) return;
 
         const data = await readTextFile(this.file + '.cache', {
-            baseDir: BaseDirectory.AppCache,
+            baseDir: BaseDirectory.AppCache
         });
 
         this._data = JSON.parse(data);
     }
 
     /**
-     * Attempt to save to disk
+     * Attempt to save to disk.
+     * 
      * @private
      */
     async _attemptSaveData() {
@@ -60,8 +63,8 @@ class Cache {
         });
 
         if (doesExist) {
-            const data = await writeTextFile(this.file + '.cache', JSON.stringify(this._data), {
-                baseDir: BaseDirectory.AppCache,
+            await writeTextFile(this.file + '.cache', JSON.stringify(this._data), {
+                baseDir: BaseDirectory.AppCache
             });
         } else {
             const file = await create(this.file + '.cache', {
@@ -75,21 +78,24 @@ class Cache {
 
     /**
      * Adds data to the cache, or updates the data if it is already there.
-     * @param {String} first The key to store the data at.
-     * @param {String} second The data to cache.
+     * 
+     * @param {string} first the key to store the data at
+     * @param {string} second the data to cache
      */
-    update(first, second) {
+    async update(first, second) {
         this._data[first] = second;
-        this._attemptSaveData();
+        await this._attemptSaveData();
     }
 
     /**
      * Gets data from the cache.
-     * @param {String} first The key to get data from.
-     * @returns 
+     * 
+     * @param {string} key the key to get data from
+     * @returns {string} the cached data
      */
-    get(first) {
-        return this._data[first];
+    async get(key) {
+        await this._promise; // Ensure loaded.
+        return this._data[key];
     }
 }
 

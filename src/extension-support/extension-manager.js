@@ -504,29 +504,34 @@ class ExtensionManager {
         this.loadingAsyncExtensions++;
 
         const sandboxMode = await this.securityManager.getSandboxMode(normalURL);
-        const rewritten = navigator.onLine || !this._isRemoteExtensionURL(extensionURL) ? await this.securityManager.rewriteExtensionURL(normalURL) : ExtensionCache.get(extensionURL);
+        const rewritten = navigator.onLine || !this._isRemoteExtensionURL(extensionURL) 
+            ? await this.securityManager.rewriteExtensionURL(normalURL) 
+            : await ExtensionCache.get(extensionURL);
 
         if (rewritten == undefined) throw new Error(`Failed to locate extension: ${extensionURL}`);
 
-        const blob = !navigator.onLine && this._isRemoteExtensionURL(extensionURL) ? new Blob([decodeURIComponent(atob(rewritten))], { type: "text/javascript" }) : (await fetch(rewritten).then(req => req.blob()));
-        const blobUrl = URL.createObjectURL(blob)
-        const newHash = await new Promise(resolve => {
-            const reader = new FileReader()
+        const blob = !navigator.onLine && this._isRemoteExtensionURL(extensionURL) 
+            ? new Blob([decodeURIComponent(atob(rewritten))], { type: "text/javascript" }) 
+            : (await fetch(rewritten).then(req => req.blob()));
+        const blobUrl = URL.createObjectURL(blob);
+        const newHash = await new Promise(async resolve => {
+            const reader = new FileReader();
             reader.onload = async ({ target: { result } }) => {
-                console.log(result)
-                this.extUrlCodes[extensionURL] = result
+                console.log(result);
+                this.extUrlCodes[extensionURL] = result;
                 if (this._isRemoteExtensionURL(extensionURL)) { 
-                    ExtensionCache.update(extensionURL, btoa(encodeURIComponent(result)));
+                    await ExtensionCache.update(extensionURL, btoa(encodeURIComponent(result)));
                 }
-                resolve(await sha256(result))
-            }
+                resolve(await sha256(result));
+            };
             reader.onerror = err => {
-                console.error("couldn't read the contents of url", extensionURL, err)
-            }
-            reader.readAsText(blob)
-        })
-        this.extensionHashes[extensionURL] = newHash
-        if (oldHash && oldHash !== newHash && this.securityManager.shouldUseLocal(extensionURL)) return Promise.reject('useLocal')
+                console.error("couldn't read the contents of url", extensionURL, err);
+            };
+            reader.readAsText(blob);
+        });
+        this.extensionHashes[extensionURL] = newHash;
+        if (oldHash && oldHash !== newHash && this.securityManager.shouldUseLocal(extensionURL)) 
+            return Promise.reject('useLocal');
 
         if (sandboxMode === 'unsandboxed') {
             const { load } = require('./tw-unsandboxed-extension-runner');
