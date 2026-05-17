@@ -504,7 +504,7 @@ class JSGenerator {
         for (let i = this.frames.length - 1; i >= 0; i--) {
             const frame = this.frames[i];
             if (frame.overrideLoop) {
-                return frame.isLoop
+                return false;
             }
             if (!frame.isLastBlock) {
                 return false;
@@ -1986,7 +1986,7 @@ class JSGenerator {
                 const variableReference = this.localVariables.next();
                 this.source += `{\nconst ${variableReference} = ${objectReference} ? ${objectReference}.lookupVariableByNameAndType("${sanitize(property)}", "", true) : "";\n`;
                 this.source += `if (${variableReference}) `;
-                this.source += `${variableReference}.value = ${value.asString()};\n}\n`;
+                this.source += `${variableReference}.value = ${value.asUnknown()};\n}\n`;
                 break;
             }
             break;
